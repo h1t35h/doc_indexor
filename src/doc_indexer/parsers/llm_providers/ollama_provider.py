@@ -16,16 +16,34 @@ class OllamaProvider(LLMProvider):
     """Ollama LLM provider for local model inference."""
 
     def __init__(
-        self, model: str = "llava", base_url: str = "http://localhost:11434"
+        self,
+        model: str = None,  # Deprecated parameter for backward compatibility
+        image_model: str = None,
+        text_model: str = None,
+        base_url: str = "http://localhost:11434",
     ) -> None:
         """
         Initialize Ollama provider.
 
         Args:
-            model: Ollama model name (e.g., "llava" for vision, "llama2" for text)
+            model: Deprecated - use image_model and text_model instead
+            image_model: Ollama model for image/vision tasks (e.g., "llava", "bakllava")
+            text_model: Ollama model for text processing (e.g., "llama2", "mistral")
             base_url: Ollama API base URL
         """
-        self.model = model
+        # Handle backward compatibility
+        if model and not image_model and not text_model:
+            # If only old 'model' param is provided, use it for both
+            self.image_model = model
+            self.text_model = model
+        else:
+            # Use new parameters with sensible defaults
+            self.image_model = image_model or "llava"
+            self.text_model = text_model or "llama2"
+
+        # Keep old attribute for compatibility
+        self.model = self.image_model
+
         self.base_url = base_url
         self.api_url = f"{base_url}/api/generate"
         self.chat_url = f"{base_url}/api/chat"
@@ -90,9 +108,9 @@ class OllamaProvider(LLMProvider):
         # Convert image to base64
         image_base64 = self._image_to_base64(image)
 
-        # Prepare the request
+        # Prepare the request - use image model for vision tasks
         payload = {
-            "model": self.model,
+            "model": self.image_model,
             "messages": [{"role": "user", "content": prompt, "images": [image_base64]}],
             "stream": False,
         }
@@ -125,10 +143,9 @@ class OllamaProvider(LLMProvider):
         # Combine prompt with text
         full_prompt = f"{prompt}\n\nText to analyze:\n{text}"
 
+        # Use text model for text analysis
         payload = {
-            "model": self.model.replace(
-                "llava", "llama2"
-            ),  # Use text model for text analysis
+            "model": self.text_model,
             "messages": [{"role": "user", "content": full_prompt}],
             "stream": False,
         }

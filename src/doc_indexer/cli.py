@@ -92,6 +92,16 @@ def main() -> None:
     help="Ollama API URL (default: http://localhost:11434)",
 )
 @click.option(
+    "--ollama-image-model",
+    default=None,
+    help="Ollama model for image/vision tasks (e.g., llava, llava:13b, bakllava)",
+)
+@click.option(
+    "--ollama-text-model",
+    default=None,
+    help="Ollama model for text processing tasks (e.g., llama2, mistral, mixtral)",
+)
+@click.option(
     "--extract-images",
     is_flag=True,
     default=True,
@@ -105,6 +115,8 @@ def index(
     parsing_mode: str,
     llm_model: str,
     ollama_url: str,
+    ollama_image_model: str,
+    ollama_text_model: str,
     extract_images: bool,
 ) -> None:
     """Index documents in a directory with optional LLM enhancement."""
@@ -141,6 +153,10 @@ def index(
 
     if llm_provider == "ollama":
         parser_config["ollama_url"] = ollama_url
+        if ollama_image_model:
+            parser_config["ollama_image_model"] = ollama_image_model
+        if ollama_text_model:
+            parser_config["ollama_text_model"] = ollama_text_model
 
     indexer = DocumentIndexer(
         persist_directory=str(persist_path), parser_config=parser_config

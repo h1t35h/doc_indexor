@@ -31,8 +31,14 @@ class LLMProviderFactory:
         provider_name = config.llm_provider.lower()
 
         if provider_name == "ollama":
+            # Use new image_model and text_model if available, fallback to ollama_model
+            image_model = config.ollama_image_model or config.ollama_model
+            text_model = config.ollama_text_model or config.ollama_model
+
             return OllamaProvider(
-                model=config.ollama_model, base_url=config.ollama_base_url
+                image_model=image_model,
+                text_model=text_model,
+                base_url=config.ollama_base_url,
             )
         elif provider_name == "openai":
             if not config.openai_api_key:

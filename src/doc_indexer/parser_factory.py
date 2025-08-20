@@ -35,9 +35,20 @@ class DocumentParser:
 
         if self.llm_provider_name != "none" and self.parsing_mode != "text_only":
             if self.llm_provider_name == "ollama":
-                model = config_dict.get("llm_model", "llava:latest")
+                # Support new separate models for image and text
+                image_model = config_dict.get("ollama_image_model")
+                text_model = config_dict.get("ollama_text_model")
+
+                # Fallback to llm_model if specific models not provided
+                if not image_model and not text_model:
+                    model = config_dict.get("llm_model", "llava:latest")
+                    image_model = model
+                    text_model = model
+
                 base_url = config_dict.get("ollama_url", "http://localhost:11434")
-                llm_provider = OllamaProvider(model=model, base_url=base_url)
+                llm_provider = OllamaProvider(
+                    image_model=image_model, text_model=text_model, base_url=base_url
+                )
             elif self.llm_provider_name == "openai":
                 import os
 

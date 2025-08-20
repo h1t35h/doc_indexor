@@ -20,7 +20,15 @@ class ParserConfig:
     llm_provider: str = "ollama"  # "ollama" or "openai"
 
     # Ollama Configuration
-    ollama_model: str = "llava"
+    ollama_model: str = (
+        "llava"  # Deprecated - use ollama_image_model and ollama_text_model
+    )
+    ollama_image_model: Optional[str] = (
+        None  # Model for image/vision tasks (e.g., llava, bakllava)
+    )
+    ollama_text_model: Optional[str] = (
+        None  # Model for text processing (e.g., llama2, mistral)
+    )
     ollama_base_url: str = "http://localhost:11434"
 
     # OpenAI Configuration
@@ -41,6 +49,10 @@ class ParserConfig:
         """Initialize configuration from environment variables."""
         self.llm_provider = os.getenv("LLM_PROVIDER", self.llm_provider)
         self.ollama_model = os.getenv("OLLAMA_MODEL", self.ollama_model)
+        self.ollama_image_model = os.getenv(
+            "OLLAMA_IMAGE_MODEL", self.ollama_image_model
+        )
+        self.ollama_text_model = os.getenv("OLLAMA_TEXT_MODEL", self.ollama_text_model)
         self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", self.ollama_base_url)
         self.openai_api_key = os.getenv("OPENAI_API_KEY", self.openai_api_key)
         self.openai_model = os.getenv("OPENAI_MODEL", self.openai_model)

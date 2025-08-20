@@ -90,11 +90,25 @@ ollama serve
 ollama pull llava  # For image analysis
 ollama pull llama2  # For text enhancement
 
-# Index with Ollama enhancement
+# Index with Ollama enhancement (using default models)
 doc-indexer index /path/to/documents \
   --llm-provider ollama \
   --parsing-mode hybrid \
   --ollama-url http://localhost:11434
+
+# Use specific models for different tasks
+doc-indexer index /path/to/documents \
+  --llm-provider ollama \
+  --parsing-mode hybrid \
+  --ollama-image-model llava:13b \
+  --ollama-text-model mistral:latest
+
+# Use advanced vision model for better accuracy
+doc-indexer index /path/to/documents \
+  --llm-provider ollama \
+  --parsing-mode llm_only \
+  --ollama-image-model bakllava:latest \
+  --ollama-text-model mixtral:8x7b
 ```
 
 ## CLI Commands
@@ -115,6 +129,8 @@ doc-indexer index [OPTIONS] DIRECTORY
 - `--extract-images`: Extract and analyze images from documents
 - `--llm-model TEXT`: Override default model for LLM provider
 - `--ollama-url TEXT`: Ollama API URL (default: http://localhost:11434)
+- `--ollama-image-model TEXT`: Ollama model for image/vision tasks (e.g., llava:13b, bakllava)
+- `--ollama-text-model TEXT`: Ollama model for text processing (e.g., llama2:70b, mistral, mixtral)
 
 ### `search` - Search Documents
 
