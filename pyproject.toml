@@ -16,6 +16,18 @@ click = "^8.1.7"
 pydantic = "^2.6.0"
 tqdm = "^4.66.0"
 numpy = "<2.0"
+# LLM providers
+langchain = "^0.1.0"
+langchain-openai = "^0.0.5"
+langchain-community = "^0.0.10"
+ollama = "^0.1.7"
+# Image processing
+pdf2image = "^1.16.3"
+pillow = "^10.0.0"
+# Configuration
+python-dotenv = "^1.0.0"
+# Optional OCR
+pytesseract = {version = "^0.3.10", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

@@ -57,7 +57,8 @@ class TestCLI:
 
         assert result.exit_code == 0
         assert "Successfully indexed 3 documents" in result.output
-        mock_indexer.index_directory.assert_called_once_with(Path(temp_dir))
+        # Use resolve() to match what CLI does
+        mock_indexer.index_directory.assert_called_once_with(Path(temp_dir).resolve())
 
     @patch("doc_indexer.cli.DocumentIndexer")
     def test_index_command_with_persist_dir(self, mock_indexer_class, runner, temp_dir):
@@ -72,7 +73,15 @@ class TestCLI:
         )
 
         assert result.exit_code == 0
-        mock_indexer_class.assert_called_once_with(persist_directory="./custom_db")
+        # Check that DocumentIndexer was called with correct resolved paths
+        call_args = mock_indexer_class.call_args
+        assert call_args is not None
+        assert Path(call_args[1]["persist_directory"]).name == "custom_db"
+        assert call_args[1]["parser_config"] == {
+            "llm_provider": "none",
+            "parsing_mode": "text_only",
+            "extract_images": True,
+        }
 
     @patch("doc_indexer.cli.DocumentIndexer")
     def test_index_command_with_clear_flag(self, mock_indexer_class, runner, temp_dir):

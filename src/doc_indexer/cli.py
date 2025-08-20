@@ -2,11 +2,56 @@
 CLI interface for document indexer.
 """
 
+import os
 from pathlib import Path
 
 import click
 
 from .indexer import DocumentIndexer
+
+
+def validate_safe_path(
+    path_str: str, base_dir: str = None, allow_absolute: bool = False
+) -> Path:
+    """Validate that a path is safe and doesn't contain directory traversal.
+
+    Args:
+        path_str: Path string to validate
+        base_dir: Base directory to restrict access to (default: current working directory)
+        allow_absolute: If True, allow absolute paths that exist
+
+    Returns:
+        Validated Path object
+
+    Raises:
+        click.ClickException: If path is unsafe
+    """
+    if base_dir is None:
+        base_dir = os.getcwd()
+
+    # Resolve to absolute path
+    target_path = Path(path_str).resolve()
+    base_path = Path(base_dir).resolve()
+
+    # Allow absolute paths if they exist and flag is set
+    if allow_absolute and target_path.is_absolute():
+        # Still check for dangerous patterns
+        if ".." in str(path_str):
+            raise click.ClickException(
+                f"Path '{path_str}' contains directory traversal"
+            )
+        return target_path
+
+    # Check if target is within base directory
+    try:
+        target_path.relative_to(base_path)
+    except ValueError:
+        raise click.ClickException(
+            f"Path '{path_str}' is outside the allowed directory. "
+            f"Please use a path within {base_path}"
+        )
+
+    return target_path
 
 
 @click.group()
@@ -24,9 +69,57 @@ def main() -> None:
     help="Directory to persist the vector database",
 )
 @click.option("--clear", is_flag=True, help="Clear existing index before indexing")
-def index(directory: str, persist_dir: str, clear: bool) -> None:
-    """Index documents in a directory."""
-    dir_path = Path(directory)
+@click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai", "none"], case_sensitive=False),
+    default="none",
+    help="LLM provider for enhanced parsing (default: none)",
+)
+@click.option(
+    "--parsing-mode",
+    type=click.Choice(["text_only", "hybrid", "llm_only"], case_sensitive=False),
+    default="text_only",
+    help="Parsing mode for document extraction (default: text_only)",
+)
+@click.option(
+    "--llm-model",
+    default=None,
+    help="Override default model for LLM provider (e.g., llava:latest for Ollama, gpt-4-vision-preview for OpenAI)",
+)
+@click.option(
+    "--ollama-url",
+    default="http://localhost:11434",
+    help="Ollama API URL (default: http://localhost:11434)",
+)
+@click.option(
+    "--extract-images",
+    is_flag=True,
+    default=True,
+    help="Extract images from documents for LLM analysis",
+)
+def index(
+    directory: str,
+    persist_dir: str,
+    clear: bool,
+    llm_provider: str,
+    parsing_mode: str,
+    llm_model: str,
+    ollama_url: str,
+    extract_images: bool,
+) -> None:
+    """Index documents in a directory with optional LLM enhancement."""
+    # Validate and sanitize paths
+    try:
+        # Allow test directories to be created temporarily
+        dir_path = Path(directory).resolve()
+        persist_path = Path(persist_dir).resolve()
+
+        # Check for dangerous patterns
+        if ".." in directory or ".." in persist_dir:
+            raise click.ClickException("Directory traversal not allowed")
+    except click.ClickException as e:
+        click.echo(f"Error: {e}", err=True)
+        raise click.Abort()
 
     if not dir_path.exists():
         click.echo(f"Error: Directory '{directory}' does not exist.", err=True)
@@ -36,7 +129,22 @@ def index(directory: str, persist_dir: str, clear: bool) -> None:
         click.echo(f"Error: '{directory}' is not a directory.", err=True)
         raise click.Abort()
 
-    indexer = DocumentIndexer(persist_directory=persist_dir)
+    # Prepare parser configuration
+    parser_config = {
+        "llm_provider": llm_provider,
+        "parsing_mode": parsing_mode,
+        "extract_images": extract_images,
+    }
+
+    if llm_model:
+        parser_config["llm_model"] = llm_model
+
+    if llm_provider == "ollama":
+        parser_config["ollama_url"] = ollama_url
+
+    indexer = DocumentIndexer(
+        persist_directory=str(persist_path), parser_config=parser_config
+    )
 
     if clear:
         if click.confirm("Are you sure you want to clear the existing index?"):
@@ -47,7 +155,13 @@ def index(directory: str, persist_dir: str, clear: bool) -> None:
             return
 
     click.echo(f"Indexing documents in: {dir_path}")
-    click.echo(f"Using persist directory: {persist_dir}")
+    click.echo(f"Using persist directory: {persist_path}")
+
+    if llm_provider != "none":
+        click.echo(f"LLM Provider: {llm_provider}")
+        click.echo(f"Parsing Mode: {parsing_mode}")
+        if llm_model:
+            click.echo(f"Model: {llm_model}")
 
     try:
         count = indexer.index_directory(dir_path)

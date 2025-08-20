@@ -8,7 +8,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 from doc_indexer.models import Document, DocumentMetadata
-from doc_indexer.parsers import DocumentParser, PDFParser, PowerPointParser, WordParser
+from doc_indexer.parser_factory import DocumentParser
+from doc_indexer.parsers import PDFParser, PowerPointParser, WordParser
+from doc_indexer.parsers.strategies.text_only import TextOnlyStrategy
 
 
 class TestDocumentParser:
@@ -117,10 +119,12 @@ class TestPDFParser:
     @pytest.fixture
     def parser(self):
         """Create a PDFParser instance."""
-        return PDFParser()
+        strategy = TextOnlyStrategy()
+        return PDFParser(parsing_strategy=strategy)
 
-    @patch("doc_indexer.parsers.PdfReader")
-    def test_parse_simple_pdf(self, mock_pdf_reader, parser):
+    @pytest.mark.asyncio
+    @patch("doc_indexer.parsers.pdf_parser.PdfReader")
+    async def test_parse_simple_pdf(self, mock_pdf_reader, parser):
         """Test parsing a simple PDF."""
         mock_page = Mock()
         mock_page.extract_text.return_value = "Page 1 content"
@@ -132,7 +136,7 @@ class TestPDFParser:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
-        result = parser.parse(tmp_path)
+        result = await parser.parse(tmp_path)
 
         assert result.content == "Page 1 content"
         assert result.metadata.filename == tmp_path.name
@@ -140,8 +144,9 @@ class TestPDFParser:
 
         tmp_path.unlink()
 
-    @patch("doc_indexer.parsers.PdfReader")
-    def test_parse_multi_page_pdf(self, mock_pdf_reader, parser):
+    @pytest.mark.asyncio
+    @patch("doc_indexer.parsers.pdf_parser.PdfReader")
+    async def test_parse_multi_page_pdf(self, mock_pdf_reader, parser):
         """Test parsing a multi-page PDF."""
         mock_pages = []
         for i in range(3):
@@ -156,7 +161,7 @@ class TestPDFParser:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
-        result = parser.parse(tmp_path)
+        result = await parser.parse(tmp_path)
 
         assert "Page 1 content" in result.content
         assert "Page 2 content" in result.content
@@ -171,25 +176,37 @@ class TestWordParser:
     @pytest.fixture
     def parser(self):
         """Create a WordParser instance."""
-        return WordParser()
+        strategy = TextOnlyStrategy()
+        return WordParser(parsing_strategy=strategy)
 
-    @patch("doc_indexer.parsers.DocxDocument")
-    def test_parse_word_document(self, mock_docx, parser):
+    @pytest.mark.asyncio
+    @patch("doc_indexer.parsers.word_parser.DocxDocument")
+    async def test_parse_word_document(self, mock_docx, parser):
         """Test parsing a Word document."""
         mock_para1 = Mock()
         mock_para1.text = "Paragraph 1"
+        mock_para1.runs = []  # No runs with page breaks
+        mock_para1._element = Mock()
+        mock_para1._element.getnext.return_value = None
+
         mock_para2 = Mock()
         mock_para2.text = "Paragraph 2"
+        mock_para2.runs = []
+        mock_para2._element = Mock()
+        mock_para2._element.getnext.return_value = None
 
         mock_doc = Mock()
         mock_doc.paragraphs = [mock_para1, mock_para2]
         mock_doc.tables = []  # Add empty tables list
+        mock_doc.part = Mock()
+        mock_doc.part.rels = Mock()
+        mock_doc.part.rels.values.return_value = []  # No images
         mock_docx.return_value = mock_doc
 
         with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
-        result = parser.parse(tmp_path)
+        result = await parser.parse(tmp_path)
 
         assert "Paragraph 1" in result.content
         assert "Paragraph 2" in result.content
@@ -204,21 +221,31 @@ class TestPowerPointParser:
     @pytest.fixture
     def parser(self):
         """Create a PowerPointParser instance."""
-        return PowerPointParser()
+        strategy = TextOnlyStrategy()
+        return PowerPointParser(parsing_strategy=strategy)
 
-    @patch("doc_indexer.parsers.Presentation")
-    def test_parse_powerpoint(self, mock_presentation, parser):
+    @pytest.mark.asyncio
+    @patch("doc_indexer.parsers.powerpoint_parser.Presentation")
+    async def test_parse_powerpoint(self, mock_presentation, parser):
         """Test parsing a PowerPoint presentation."""
         # Create mock text frames and shapes
         mock_text_frame = Mock()
         mock_text_frame.text = "Slide content"
+        mock_paragraph = Mock()
+        mock_paragraph.level = 0
+        mock_paragraph.text = "Slide content"
+        mock_text_frame.paragraphs = [mock_paragraph]
 
         mock_shape = Mock()
         mock_shape.has_text_frame = True
         mock_shape.text_frame = mock_text_frame
 
         mock_slide = Mock()
-        mock_slide.shapes = [mock_shape]
+        mock_shapes = Mock()
+        mock_shapes.__iter__ = Mock(return_value=iter([mock_shape]))
+        mock_shapes.title = None
+        mock_slide.shapes = mock_shapes
+        mock_slide.has_notes_slide = False
 
         mock_prs = Mock()
         mock_prs.slides = [mock_slide]
@@ -227,7 +254,7 @@ class TestPowerPointParser:
         with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
-        result = parser.parse(tmp_path)
+        result = await parser.parse(tmp_path)
 
         assert "Slide content" in result.content
         assert result.metadata.file_type == "pptx"
